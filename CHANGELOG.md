@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+- return `i2c::Error::Timeout` instead of `nb::WouldBlock` when time is out
 - `gpio`: port and pin generics first, then mode, `PinMode` for modes instead of pins, other cleanups
 
 ### Breaking changes
