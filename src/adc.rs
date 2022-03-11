@@ -1,7 +1,6 @@
 //! # API for the Analog to Digital converter
 
 use core::marker::PhantomData;
-use embedded_hal::adc::{Channel, OneShot};
 
 #[cfg(all(feature = "stm32f103", any(feature = "high", feature = "xl",),))]
 use crate::dma::dma2;
@@ -103,10 +102,15 @@ impl From<Align> for bool {
 macro_rules! adc_pins {
     ($ADC:ty, $($pin:ty => $chan:literal),+ $(,)*) => {
         $(
-            impl Channel<$ADC> for $pin {
+            impl embedded_hal::adc::Channel<$ADC> for $pin {
                 type ID = u8;
 
                 fn channel() -> u8 { $chan }
+            }
+
+            impl embedded_hal_one::adc::nb::Channel<$ADC> for $pin {
+                type ID = u8;
+                fn channel(&self) -> u8 { $chan }
             }
         )+
     };
@@ -437,19 +441,31 @@ macro_rules! adc_hal {
                 }
             }
 
-            impl<WORD, PIN> OneShot<$ADC, WORD, PIN> for Adc<$ADC>
+            impl<WORD, PIN> embedded_hal::adc::OneShot<$ADC, WORD, PIN> for Adc<$ADC>
             where
                 WORD: From<u16>,
-                PIN: Channel<$ADC, ID = u8>,
-                {
-                    type Error = ();
+                PIN: embedded_hal::adc::Channel<$ADC, ID = u8>,
+            {
+                type Error = ();
 
-                    fn read(&mut self, _pin: &mut PIN) -> nb::Result<WORD, Self::Error> {
-                        let res = self.convert(PIN::channel());
-                        Ok(res.into())
-                    }
+                fn read(&mut self, _pin: &mut PIN) -> nb::Result<WORD, Self::Error> {
+                    let res = self.convert(PIN::channel());
+                    Ok(res.into())
                 }
+            }
 
+            impl<WORD, PIN> embedded_hal_one::adc::nb::OneShot<$ADC, WORD, PIN> for Adc<$ADC>
+            where
+                WORD: From<u16>,
+                PIN:embedded_hal_one::adc::nb::Channel<$ADC, ID=u8>,
+            {
+                type Error = ();
+
+                fn read(&mut self, pin: &mut PIN) -> nb::Result<WORD, Self::Error> {
+                    let res = self.convert(pin.channel());
+                    Ok(res.into())
+                }
+            }
         )+
     }
 }
@@ -641,7 +657,7 @@ macro_rules! adcdma {
                 dma_ch: $dmarxch,
             ) -> AdcDma<$ADCX, PIN, Continuous, $dmarxch>
             where
-                PIN: Channel<$ADCX, ID = u8>,
+                PIN: embedded_hal::adc::Channel<$ADCX, ID = u8>,
             {
                 self.rb.cr1.modify(|_, w| w.discen().clear_bit());
                 self.rb.cr2.modify(|_, w| w.align().bit(self.align.into()));
